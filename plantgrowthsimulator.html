@@ -1,0 +1,404 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Plant Growth Simulator</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f0fdf4; /* Light green background */
+        }
+        .plant-card {
+            background-color: #ffffff;
+            border: 1px solid #d1fae5; /* Lighter green border */
+            border-radius: 0.75rem;
+            padding: 1.5rem;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+            transition: transform 0.2s ease-in-out;
+        }
+        .plant-card:hover {
+            transform: translateY(-5px);
+        }
+        .plant-icon {
+            font-size: 3rem; /* Increased icon size */
+            line-height: 1;
+            height: 60px; /* Fixed height for icon area */
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-bottom: 0.5rem;
+        }
+        .slider {
+            -webkit-appearance: none;
+            width: 100%;
+            height: 10px;
+            border-radius: 5px;
+            background: #d1d5db;
+            outline: none;
+            opacity: 0.7;
+            -webkit-transition: .2s;
+            transition: opacity .2s;
+        }
+        .slider:hover {
+            opacity: 1;
+        }
+        .slider::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            background: #10b981; /* Emerald green */
+            cursor: pointer;
+        }
+        .slider::-moz-range-thumb {
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            background: #10b981;
+            cursor: pointer;
+            border: none;
+        }
+        .status-bar {
+            height: 10px;
+            background-color: #e5e7eb;
+            border-radius: 5px;
+            overflow: hidden;
+            margin-top: 0.25rem;
+        }
+        .status-bar-fill {
+            height: 100%;
+            background-color: #34d399; /* Green for health */
+            border-radius: 5px;
+            transition: width 0.3s ease-in-out;
+        }
+        .status-wilting .status-bar-fill { background-color: #f59e0b; } /* Amber for wilting */
+        .status-dead .status-bar-fill { background-color: #ef4444; width: 100% !important; } /* Red for dead */
+
+        .btn {
+            padding: 0.75rem 1.5rem;
+            border-radius: 0.5rem;
+            font-weight: 600;
+            transition: background-color 0.2s ease;
+        }
+        .btn-primary {
+            background-color: #10b981; /* Emerald */
+            color: white;
+        }
+        .btn-primary:hover {
+            background-color: #059669;
+        }
+        .btn-secondary {
+            background-color: #6b7280; /* Gray */
+            color: white;
+        }
+        .btn-secondary:hover {
+            background-color: #4b5563;
+        }
+        /* Message box for alerts */
+        .message-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0,0,0,0.5);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+            opacity: 0;
+            visibility: hidden;
+            transition: opacity 0.3s ease, visibility 0.3s ease;
+        }
+        .message-overlay.active {
+            opacity: 1;
+            visibility: visible;
+        }
+        .message-box {
+            background-color: white;
+            padding: 2rem;
+            border-radius: 0.5rem;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+            text-align: center;
+            max-width: 90%;
+            width: 400px;
+        }
+    </style>
+</head>
+<body class="p-4 md:p-8">
+
+    <div class="container mx-auto max-w-5xl">
+        <header class="text-center mb-8">
+            <h1 class="text-4xl font-bold text-green-700">Plant Growth Simulator</h1>
+            <p class="text-lg text-gray-600 mt-2">Adjust sunlight to help your Sunpetals thrive! (Ideal: 5-7)</p>
+        </header>
+
+        <div id="game-info" class="text-center mb-6 p-4 bg-emerald-100 border border-emerald-300 rounded-lg">
+            <p class="text-xl font-semibold text-emerald-700">Day: <span id="day-counter">0</span></p>
+            <p id="overall-message" class="text-md text-emerald-600 mt-1"></p>
+        </div>
+
+        <div id="plants-container" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+            <!-- Plant cards will be injected here by JavaScript -->
+        </div>
+
+        <div class="flex flex-col sm:flex-row justify-center items-center space-y-4 sm:space-y-0 sm:space-x-4">
+            <button id="next-day-btn" class="btn btn-primary w-full sm:w-auto">Advance Day</button>
+            <button id="restart-btn" class="btn btn-secondary w-full sm:w-auto">Restart Game</button>
+        </div>
+    </div>
+
+    <!-- Custom Message Box Modal -->
+    <div id="custom-message-overlay" class="message-overlay">
+        <div class="message-box">
+            <h3 id="custom-message-title" class="text-xl font-semibold mb-2">Notification</h3>
+            <p id="custom-message-text" class="text-gray-700 mb-4">Message here.</p>
+            <button id="custom-message-close" class="btn btn-primary">OK</button>
+        </div>
+    </div>
+
+    <script>
+        // --- Game Configuration ---
+        // Define the single plant type's characteristics (based on Sunpetal)
+        const SINGLE_PLANT_PROTOTYPE = {
+            idealSun: [5, 7], // Optimal sunlight range (5-7)
+            // stressSun is no longer used directly as conditions are either ideal or dangerous.
+            maxHeight: 10,
+            baseIcon: "🌻", // Mature icon
+        };
+
+        // Create 4 instances of the same plant type
+        const PLANT_TYPES = [
+            { id: "sunpetal_a", name: "Sunpetal A", ...SINGLE_PLANT_PROTOTYPE },
+            { id: "sunpetal_b", name: "Sunpetal B", ...SINGLE_PLANT_PROTOTYPE },
+            { id: "sunpetal_c", name: "Sunpetal C", ...SINGLE_PLANT_PROTOTYPE },
+            { id: "sunpetal_d", name: "Sunpetal D", ...SINGLE_PLANT_PROTOTYPE }
+        ];
+
+        // --- Game State ---
+        let plants = [];
+        let currentDay = 0;
+
+        // --- DOM Elements ---
+        const plantsContainer = document.getElementById('plants-container');
+        const nextDayBtn = document.getElementById('next-day-btn');
+        const restartBtn = document.getElementById('restart-btn');
+        const dayCounterEl = document.getElementById('day-counter');
+        const overallMessageEl = document.getElementById('overall-message');
+        const messageOverlay = document.getElementById('custom-message-overlay');
+        const messageTitleEl = document.getElementById('custom-message-title');
+        const messageTextEl = document.getElementById('custom-message-text');
+        const messageCloseBtn = document.getElementById('custom-message-close');
+
+        // --- Utility Functions ---
+        function showMessage(title, text) {
+            messageTitleEl.textContent = title;
+            messageTextEl.textContent = text;
+            messageOverlay.classList.add('active');
+        }
+
+        messageCloseBtn.addEventListener('click', () => {
+            messageOverlay.classList.remove('active');
+        });
+
+        // --- Game Logic Functions ---
+        function initializePlant(plantData) {
+            return {
+                ...plantData,
+                currentSun: Math.floor((plantData.idealSun[0] + plantData.idealSun[1]) / 2), // Start at 6
+                height: 0,
+                status: "Seed",
+                consecutiveStressDays: 0,
+                consecutiveOptimalDays: 0,
+                messages: []
+            };
+        }
+
+        function getPlantIcon(plant) {
+            switch (plant.status) {
+                case "Dead": return "💀";
+                case "Wilting": return "🥀";
+                case "Seed": return "🌰";
+                case "Sprout": return "🌱";
+                case "Growing": return plant.baseIcon.substring(0,1); 
+                case "Mature": return plant.baseIcon;
+                case "Thriving": return `✨${plant.baseIcon}✨`;
+                default: return "❓";
+            }
+        }
+
+        function updatePlantStatus(plant) {
+            plant.messages = []; 
+
+            if (plant.status === "Wilting" && plant.height <= 0) {
+                plant.status = "Dead";
+                plant.height = 0;
+                plant.messages.push(`${plant.name} has withered away.`);
+                return;
+            }
+            if (plant.status === "Dead") return;
+
+            // Recovery from wilting IF sun is now optimal
+            if (plant.status === "Wilting" && plant.currentSun >= plant.idealSun[0] && plant.currentSun <= plant.idealSun[1]) {
+                 plant.status = "Growing"; 
+                 plant.messages.push(`${plant.name} is recovering!`);
+            }
+            
+            if (plant.height >= plant.maxHeight && plant.consecutiveOptimalDays >= 2) { 
+                plant.status = "Thriving";
+                plant.messages.push(`${plant.name} is thriving!`);
+            } else if (plant.height >= plant.maxHeight * 0.7) {
+                plant.status = "Mature";
+            } else if (plant.height >= plant.maxHeight * 0.3) {
+                plant.status = "Growing";
+            } else if (plant.height > 0) {
+                plant.status = "Sprout";
+            } else { // Height is 0
+                if (plant.status !== "Seed") { 
+                     // If wilting for a few days, or height dropped to 0 due to bad sun, it might die
+                     if(plant.consecutiveStressDays > 1 && plant.status === "Wilting") { // Dies a bit faster if consistently stressed
+                        plant.status = "Dead";
+                        plant.messages.push(`${plant.name} couldn't survive the harsh conditions.`);
+                     } else if (plant.status === "Wilting" && plant.height <=0) { // Immediate death if wilting brought height to 0
+                        plant.status = "Dead";
+                        plant.messages.push(`${plant.name} withered from lack/excess of sun.`);
+                     }
+                }
+            }
+        }
+
+        function advanceDay() {
+            currentDay++;
+            dayCounterEl.textContent = currentDay;
+            overallMessageEl.textContent = ""; 
+            let allThriving = true;
+            let anyDead = false;
+
+            plants.forEach(plant => {
+                if (plant.status === "Dead") {
+                    anyDead = true;
+                    allThriving = false; 
+                    return;
+                }
+
+                const sun = plant.currentSun;
+                let growthToday = 0;
+
+                // New sunlight logic:
+                // Ideal: 5-7
+                // Dangerous (die): 0-4 OR 8-10
+                if (sun >= plant.idealSun[0] && sun <= plant.idealSun[1]) { // Optimal: 5-7
+                    plant.consecutiveOptimalDays++;
+                    plant.consecutiveStressDays = 0;
+                    growthToday = (plant.status === "Wilting") ? 1 : 1.5; 
+                    if (plant.status !== "Wilting") plant.messages.push(`${plant.name} loved the sun!`);
+                } else { // Dangerous: 0-4 or 8-10
+                    plant.consecutiveOptimalDays = 0;
+                    plant.consecutiveStressDays++;
+                    growthToday = -1.5; // Increased negative impact for faster wilting/death
+                    plant.status = "Wilting";
+                    if (sun <=4) {
+                        plant.messages.push(`${plant.name} got too little sun and is wilting!`);
+                    } else {
+                        plant.messages.push(`${plant.name} got too much sun and is wilting!`);
+                    }
+                }
+
+                plant.height = Math.max(0, Math.min(plant.maxHeight, plant.height + growthToday));
+                updatePlantStatus(plant); // Call updatePlantStatus *after* height change and status change (like wilting)
+
+                if (plant.status !== "Thriving") allThriving = false;
+                if (plant.status === "Dead") anyDead = true;
+            });
+
+            renderPlants();
+            checkGameEndCondition(allThriving, anyDead);
+        }
+        
+        function checkGameEndCondition(allThriving, anyDead) {
+            let gameEndMessage = "";
+            let gameEndTitle = "Game Update";
+
+            if (allThriving) {
+                gameEndTitle = "Congratulations!";
+                gameEndMessage = "All your Sunpetals are thriving! You've mastered their needs!";
+                nextDayBtn.disabled = true;
+            } else {
+                const livingPlants = plants.filter(p => p.status !== "Dead").length;
+                if (livingPlants === 0 && plants.length > 0) {
+                    gameEndTitle = "Oh No!";
+                    gameEndMessage = "All your Sunpetals have withered. Better luck next time!";
+                    nextDayBtn.disabled = true;
+                }
+            }
+            if (gameEndMessage) {
+                overallMessageEl.textContent = gameEndMessage; 
+                showMessage(gameEndTitle, gameEndMessage); 
+            }
+        }
+
+        function renderPlants() {
+            plantsContainer.innerHTML = ''; 
+            plants.forEach((plant) => {
+                const card = document.createElement('div');
+                card.className = `plant-card flex flex-col items-center space-y-2 ${plant.status.toLowerCase()}`;
+                
+                let statusColorClass = 'text-gray-600';
+                if (plant.status === "Thriving") statusColorClass = 'text-green-500';
+                else if (plant.status === "Wilting") statusColorClass = 'text-amber-500';
+                else if (plant.status === "Dead") statusColorClass = 'text-red-500';
+
+                card.innerHTML = `
+                    <h3 class="text-xl font-semibold text-gray-700">${plant.name}</h3>
+                    <div class="plant-icon">${getPlantIcon(plant)}</div>
+                    <p class="text-sm ${statusColorClass} font-medium">Status: ${plant.status}</p>
+                    <div class="w-full status-bar">
+                        <div class="status-bar-fill" style="width: ${plant.status === 'Dead' ? 0 : (plant.height / plant.maxHeight) * 100}%"></div>
+                    </div>
+                    <p class="text-xs text-gray-500">Height: ${plant.height.toFixed(1)} / ${plant.maxHeight}</p>
+                    
+                    <div class="w-full pt-2">
+                        <label for="sun-${plant.id}" class="text-sm text-gray-600 block mb-1">Sunlight: <span id="sun-value-${plant.id}">${plant.currentSun}</span></label>
+                        <input type="range" min="0" max="10" value="${plant.currentSun}" class="slider" id="sun-${plant.id}" ${plant.status === 'Dead' ? 'disabled' : ''}>
+                    </div>
+                    <div id="plant-message-${plant.id}" class="text-xs text-blue-600 h-6 mt-1 text-center">
+                        ${plant.messages.length > 0 ? plant.messages[plant.messages.length-1] : ''}
+                    </div>
+                `;
+                plantsContainer.appendChild(card);
+
+                const slider = document.getElementById(`sun-${plant.id}`);
+                const sunValueDisplay = document.getElementById(`sun-value-${plant.id}`);
+                slider.addEventListener('input', (e) => {
+                    if (plant.status !== 'Dead') {
+                        plant.currentSun = parseInt(e.target.value);
+                        sunValueDisplay.textContent = plant.currentSun;
+                    }
+                });
+            });
+        }
+
+        function setupGame() {
+            currentDay = 0;
+            plants = PLANT_TYPES.map(pt => initializePlant(pt)); 
+            dayCounterEl.textContent = currentDay;
+            overallMessageEl.textContent = "Adjust sunlight for each Sunpetal (Ideal: 5-7) and advance the day.";
+            nextDayBtn.disabled = false;
+            renderPlants();
+        }
+
+        nextDayBtn.addEventListener('click', advanceDay);
+        restartBtn.addEventListener('click', () => {
+            showMessage("Game Restarted", "The garden has been reset. Try again with your Sunpetals!");
+            setupGame();
+        });
+
+        window.onload = () => {
+            setupGame();
+        };
+    </script>
+</body>
+</html>
