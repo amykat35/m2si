@@ -133,7 +133,7 @@
     <div class="container mx-auto max-w-5xl">
         <header class="text-center mb-8">
             <h1 class="text-4xl font-bold text-green-700">Plant Growth Simulator</h1>
-            <p class="text-lg text-gray-600 mt-2">Adjust sunlight to help your Sunpetals thrive! (Ideal: 5-7)</p>
+            <p class="text-lg text-gray-600 mt-2">Adjust sunlight to help your Sunpetals thrive!</p>
         </header>
 
         <div id="game-info" class="text-center mb-6 p-4 bg-emerald-100 border border-emerald-300 rounded-lg">
@@ -164,7 +164,7 @@
         // --- Game Configuration ---
         // Define the single plant type's characteristics (based on Sunpetal)
         const SINGLE_PLANT_PROTOTYPE = {
-            idealSun: [5, 7], // Optimal sunlight range (5-7)
+            idealSun: [5, 7], // Optimal sunlight range (5-7) - This is internal logic, not displayed
             // stressSun is no longer used directly as conditions are either ideal or dangerous.
             maxHeight: 10,
             baseIcon: "🌻", // Mature icon
@@ -385,7 +385,7 @@
             currentDay = 0;
             plants = PLANT_TYPES.map(pt => initializePlant(pt)); 
             dayCounterEl.textContent = currentDay;
-            overallMessageEl.textContent = "Adjust sunlight for each Sunpetal (Ideal: 5-7) and advance the day.";
+            overallMessageEl.textContent = "Adjust sunlight for each Sunpetal and advance the day."; // Removed hint
             nextDayBtn.disabled = false;
             renderPlants();
         }
